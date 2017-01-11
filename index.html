@@ -1,1 +1,212 @@
-"Hello World" 
+<!DOCTYPE html>
+<html>
+  <head>
+  	<link rel="stylesheet" href="scripts/jquery.contextMenu.css" type="text/css" media="screen">
+    <script src="scripts/jquery-1.12.3.js"></script>
+    <script src="scripts/jquery.contextMenu.js"></script>
+    <script src="scripts/raphael.js"></script>
+    <script src="scripts/svg-pan-zoom.js"></script>
+    <script src="scripts/raphael.export.js"></script>
+    <script src="scripts/raphael.free_transform.js"></script>
+    <script src="scripts/randomColor.js"></script>
+    <style>
+        .left, .right {
+            display:inline-block;
+            border: solid 1px #000;
+        }
+    </style>
+  </head>
+  <body>
+  	<div>
+    	<input type="button" id="export" value="Export" />
+    	<input type="button" id="save" value="Save" />
+    </div>
+    <div id="svg1" class="left"></div>
+    <div id="exportedHtml" class="right"></div>
+   <script>
+		var ft;
+		var focusedElement;
+		
+        // raphael.js sample code
+        // create svg tag in div
+        var paper = Raphael("svg1", screen.width, screen.height);
+        $("#svg1").click(function(){ 
+        	if (ft != null) ft.unplug(); 
+        });
+
+		// custom shape : star
+		Raphael.fn.star = function(x, y, r) {
+		    // start at the top point
+		    var path = "M" + x + "," + (y - r);
+		    
+		    // let's draw this the way we might by hand, by connecting each point the one two-fifths of the way around the clock
+		    for (var c = 0; c < 6; c += 1) {
+		        var angle = 270 + c * 144,
+		            rx = x + r * Math.cos(angle * Math.PI / 180),
+		            ry = y + r * Math.sin(angle * Math.PI / 180);
+		
+		        path += "L" + rx + "," + ry;
+		    }    
+		   
+		    return paper.path(path);
+		}
+        
+        function setFocus(shape) {   
+        	if (ft != null) ft.unplug();
+			ft = paper.freeTransform(shape);
+			focusedElement = shape;
+		}
+        
+        function insertShape(shape, opt) {        	
+			var e1;
+			                
+            // get mouse position
+            var centerX = parseInt(opt.$menu.css("left").replace("px",""));
+            var centerY = parseInt(opt.$menu.css("top").replace("px",""));
+            
+            // draw shape
+            var width = 80;
+            var height = 80;
+			if (shape == "circle") {
+				e1 = paper.ellipse(centerX,centerY,width/2,height/2).attr({fill: randomColor()});
+			} else if (shape == "rect") {
+				e1 = paper.rect(centerX,centerY,width,height,5).attr({fill: randomColor()});
+			} else if (shape == "star") {
+				e1 = paper.star(centerX,centerY, width).attr({fill: randomColor(),  'stroke-width': 0});
+			} else if (shape == "line") {
+				e1 = paper.path( "M"+centerX+","+centerY+" L"+(centerX+width)+","+(centerY+height)).attr({stroke: randomColor(), "stroke-width": 3});
+				e1.attr({"stroke": "brown", "stroke-width": 3, "arrow-end": "block-wide-long"}); // , "arrow-start": "oval-narrow-midium"
+			} else if (shape == "text") {
+				e1 = paper.text(centerX,centerY, "test").attr({fill:randomColor(), 'font-size':28, 'stroke-width':1,'text-anchor':'start' });
+			}
+			
+			e1.mouseover(function (e) {
+                this[0].style.cursor = "pointer";                
+            })
+            e1.mouseout(function (e) {
+                this[0].style.cursor = "";
+            })
+			e1.click(function(e){ 
+				setFocus(e1); 
+				e.stopPropagation(); 
+			});
+			setFocus(e1);
+		}
+		
+        function saveFile(url, data) {        	
+			$.ajax({
+		        url: url,
+		        type: 'POST',
+		        data: data,
+		        cache: false,
+		        //dataType: 'json',
+		        //processData: false, // Don't process the files
+		        contentType: false, // Set content type to false as jQuery will tell the server its a query string request
+		        success: function(data, textStatus, jqXHR)
+		        {
+		            if(typeof data.error === 'undefined')
+		            {
+		                // Success so call function to process the form
+		                alert("Successful !!");
+		            }
+		            else
+		            {
+		                // Handle errors here
+		                alert("failed !!\n"+data.error);
+		            }
+		        },
+		        error: function(jqXHR, textStatus, errorThrown)
+		        {
+		            // Handle errors here
+		            alert('ERRORS: ' + textStatus);
+		        }
+		    });
+		}
+		
+		// only work in REAL browser
+		var saveData = (function () {
+		    var a = document.createElement("a");
+		    document.body.appendChild(a);
+		    a.style = "display: none";
+		    return function (data, fileName) {
+		        var //json = JSON.stringify(data),
+		            blob = new Blob(["<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"+data], {type: "octet/stream"}),
+		            url = window.URL.createObjectURL(blob);
+		        a.href = url;
+		        a.download = fileName;
+		        a.click();
+		        window.URL.revokeObjectURL(url);
+		    };
+		}());
+		
+		$(document).ready(function() {
+			$("#export").on("click", function() {
+				$("#exportedHtml").html(paper.toSVG());
+				//$("#exportedHtml").text(paper.toSVG());
+			});
+			$("#save").on("click", function() {
+				if (ft != null) ft.unplug();
+				saveData(paper.toSVG(), "x.svg");
+				//saveFile("http://localhost:8085/root/x.svg/upload", paper.toSVG());
+				//download("http://localhost:8085/root/x.svg/download", paper.toSVG());
+				//location.href=encodeURI("http://localhost:8085/root/x.svg/download?data="+ paper.toSVG());
+			});
+			
+			$.contextMenu({
+			    selector: 'body',
+			    items: {
+			        text: {
+			            name: "text",
+			            callback: function(key, opt){
+			                insertShape(key, opt);
+			            }
+			        },
+			        circle: {
+			            name: "circle",
+			            callback: function(key, opt){
+			                insertShape(key, opt);
+			            }
+			        },
+			        rect: {
+			            name: "rectangle",
+			            callback: function(key, opt){
+			                insertShape(key, opt);
+			            }
+			        },
+			        star: {
+			            name: "star",
+			            callback: function(key, opt){
+			                insertShape(key, opt);
+			            }
+			        },
+			        line: {
+			            name: "line",
+			            callback: function(key, opt){
+			                insertShape(key, opt);
+			            }
+			        },
+			        separator1: {
+			            name: "----------"
+			        },
+			        toBack: {
+			            name: "to back",
+			            callback: function(key, opt){
+			                if (focusedElement != null) focusedElement.toBack();
+			            }
+			        },
+			        toFront: {
+			            name: "to front",
+			            callback: function(key, opt){
+			                if (focusedElement != null) focusedElement.toFront();
+			            }
+			        },
+			    }
+			});
+		});
+    </script>
+
+
+  </body>
+</html>
+
+
